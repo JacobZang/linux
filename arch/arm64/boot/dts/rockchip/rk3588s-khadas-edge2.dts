@@ -532,6 +532,18 @@
         clock-output-names = "pt7c4363";
         wakeup-source;
     };
+
+    mcu: khadas-mcu@18 {
+        compatible = "khadas-mcu";
+        status = "okay";
+        reg = <0x18>;
+        fan,trig_temp_level0 = <50>;
+        fan,trig_temp_level1 = <60>;
+        fan,trig_temp_level2 = <70>;
+        fan,trig_temp_level3 = <80>;
+        hwver = "EDGE2.V11";
+
+    };
 };
 
 &reboot_mode {
@@ -735,13 +747,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&tp_rst_gpio>;
 		status = "okay";
-	};
-
-
-	mcu: khadas-mcu@18 {
-		compatible = "khadas-mcu";
-		status = "okay";
-		reg = <0x18>;
 	};
 };
 
@@ -1046,6 +1051,10 @@
 		spi-max-frequency = <100000000>;
 		status = "okay";
 	};
+};
+
+&tsadc {
+	status = "okay";
 };
 
 &u2phy0_otg {
