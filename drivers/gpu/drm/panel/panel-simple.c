@@ -167,7 +167,7 @@ struct panel_desc {
 		 * finished, the driver waits for the remaining time.
 		 */
 		unsigned int unprepare;
-		unsigned int reset;
+	//	unsigned int reset;
 		unsigned int init;
 	} delay;
 
@@ -210,9 +210,8 @@ struct panel_simple {
 	struct i2c_adapter *ddc;
 
 	struct gpio_desc *enable_gpio;
-	struct gpio_desc *reset_gpio;
-
-	struct edid *edid;
+//	struct gpio_desc *reset_gpio;
+	struct gpio_desc *hpd_gpio;
 
 	struct drm_display_mode override_mode;
 
@@ -605,10 +604,14 @@ static int panel_simple_unprepare(struct drm_panel *panel)
 		}
 	}
 
-	pm_runtime_mark_last_busy(panel->dev);
-	ret = pm_runtime_put_autosuspend(panel->dev);
-	if (ret < 0)
-		return ret;
+//	gpiod_direction_output(p->reset_gpio, 1);
+	gpiod_direction_output(p->enable_gpio, 0);
+
+	panel_simple_regulator_disable(p);
+
+	if (p->desc->delay.unprepare)
+		msleep(p->desc->delay.unprepare);
+
 	p->prepared = false;
 
 	return 0;
@@ -652,12 +655,40 @@ static int panel_simple_prepare(struct drm_panel *panel)
 		return ret;
 	}
 
-	gpiod_set_value_cansleep(p->reset_gpio, 1);
+	gpiod_direction_output(p->enable_gpio, 1);
 
-	if (p->desc->delay.reset)
-		panel_simple_msleep(p->desc->delay.reset);
+	delay = p->desc->delay.prepare;
+	if (p->no_hpd)
+		delay += p->desc->delay.hpd_absent_delay;
+	if (delay)
+		msleep(delay);
 
-	gpiod_set_value_cansleep(p->reset_gpio, 0);
+	if (p->hpd_gpio) {
+		if (IS_ERR(p->hpd_gpio)) {
+			err = panel_simple_get_hpd_gpio(panel->dev, p, false);
+			if (err)
+				return err;
+		}
+
+		err = readx_poll_timeout(gpiod_get_value_cansleep, p->hpd_gpio,
+					 hpd_asserted, hpd_asserted,
+					 1000, 2000000);
+		if (hpd_asserted < 0)
+			err = hpd_asserted;
+
+		if (err) {
+			dev_err(panel->dev,
+				"error waiting for hpd GPIO: %d\n", err);
+			return err;
+		}
+	}
+
+//	gpiod_direction_output(p->reset_gpio, 1);
+
+//	if (p->desc->delay.reset)
+//		msleep(p->desc->delay.reset);
+
+//	gpiod_direction_output(p->reset_gpio, 0);
 
 	if (p->desc->delay.init)
 		panel_simple_msleep(p->desc->delay.init);
@@ -933,13 +964,13 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 		return err;
 	}
 
-	panel->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_ASIS);
-	if (IS_ERR(panel->reset_gpio)) {
-		err = PTR_ERR(panel->reset_gpio);
-		if (err != -EPROBE_DEFER)
-			dev_err(dev, "failed to get reset GPIO: %d\n", err);
-		return err;
-	}
+//	panel->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_ASIS);
+//	if (IS_ERR(panel->reset_gpio)) {
+//		err = PTR_ERR(panel->reset_gpio);
+//		if (err != -EPROBE_DEFER)
+//			dev_err(dev, "failed to get reset GPIO: %d\n", err);
+//		return err;
+//	}
 
 	err = of_drm_get_panel_orientation(dev->of_node, &panel->orientation);
 	if (err) {
@@ -4759,7 +4790,7 @@ static int panel_simple_of_get_desc_data(struct device *dev,
 	of_property_read_u32(np, "enable-delay-ms", &desc->delay.enable);
 	of_property_read_u32(np, "disable-delay-ms", &desc->delay.disable);
 	of_property_read_u32(np, "unprepare-delay-ms", &desc->delay.unprepare);
-	of_property_read_u32(np, "reset-delay-ms", &desc->delay.reset);
+//	of_property_read_u32(np, "reset-delay-ms", &desc->delay.reset);
 	of_property_read_u32(np, "init-delay-ms", &desc->delay.init);
 
 	data = of_get_property(np, "panel-init-sequence", &len);
