@@ -78,6 +78,9 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 	u32 irqf;
 	u32 val;
 
+	if (!np || !of_device_is_compatible(np, "brcm,bcm4329-fmac"))
+		return;
+
 	/* Apple ARM64 platforms have their own idea of board type, passed in
 	 * via the device tree. They also have an antenna SKU parameter
 	 */
@@ -116,14 +119,12 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 	}
 
 	clk = devm_clk_get_optional_enabled(dev, "lpo");
-	if (IS_ERR(clk))
-	if (clk) {
+	if (!IS_ERR_OR_NULL(clk)) {
 		brcmf_dbg(INFO, "enabling 32kHz clock\n");
 		clk_set_rate(clk, 32768);
-	}
-
-	if (!np || !of_device_is_compatible(np, "brcm,bcm4329-fmac"))
+	} else {
 		return;
+	}
 
 	err = brcmf_of_get_country_codes(dev, settings);
 	if (err)
